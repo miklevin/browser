@@ -67,8 +67,7 @@
           # System dependencies needed to build/run the test environment
           # These are available when the `builder` script runs.
           buildInputs = with pkgs; [
-            python3
-            virtualenv
+            (python3.withPackages(ps: [ ps.selenium ]))
             coreutils # for mktemp, etc.
             bash      # for running the builder script
 
@@ -89,8 +88,8 @@
             echo "--- Starting Standalone Selenium Test Runner ---"
 
             # Ensure all buildInputs are available in PATH for this script
-            export PATH="${pkgs.python3}/bin:${pkgs.virtualenv}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.chromedriver}/bin:${pkgs.chromium}/bin:${findBrowserScript}/bin:$PATH"
-            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath buildInputs}:$LD_LIBRARY_PATH"
+            export PATH="${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.chromedriver}/bin:${pkgs.chromium}/bin:${findBrowserScript}/bin:$PATH"
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ python3 coreutils bash chromedriver chromium findBrowserScript zlib gcc ])}:$LD_LIBRARY_PATH"
 
 
             # Determine EFFECTIVE_OS for find-browser (used by python script via os.environ)
@@ -109,18 +108,8 @@
             echo "Builder: Working directory: $WORK_DIR"
             cd "$WORK_DIR"
 
-            echo "Builder: Creating Python virtual environment (.test-venv)..."
-            python -m venv .test-venv
-            source .test-venv/bin/activate
-
-            echo "Builder: Installing 'selenium' via pip..."
-            pip install --upgrade pip #>/dev/null
-            pip install selenium #>/dev/null
-            echo "Builder: Selenium installed in venv."
-
             echo "Builder: Running the Selenium POC Python script..."
-            # The python executable here is from the venv
-            # The test_selenium.py script is made available via testSeleniumPy derivation
+            # The python executable here is from the Nix environment with selenium installed
             python ${testSeleniumPy}/bin/test_selenium 
             
             echo "Builder: Selenium POC script finished."
@@ -150,10 +139,7 @@
         devShells.default = pkgs.mkShell {
           name = "selenium-poc-devshell";
           packages = with pkgs; [
-            python3
-            virtualenv
-            (python3.withPackages(ps: [ps.pip])) # Ensure pip is easily available for venv
-            
+            (python3.withPackages(ps: [ ps.selenium ]))
             chromedriver
             chromium
             findBrowserScript
@@ -162,8 +148,7 @@
           ];
           shellHook = ''
             echo "Standalone Selenium POC Dev Shell"
-            echo "To setup venv: python -m venv .poc-venv && source .poc-venv/bin/activate && pip install selenium"
-            echo "Then run: python ./test_selenium.py"
+            echo "Run: python ./test_selenium.py"
             
             if [[ -n "$WSL_DISTRO_NAME" ]]; then
               export EFFECTIVE_OS="wsl"

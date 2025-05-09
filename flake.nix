@@ -64,16 +64,35 @@
 
             echo "--- Starting ${if isDarwin then "Mac" else "Linux"} Selenium Test Runner ---"
 
-            export PATH="${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:$PATH"
+            # Set up PATH for Nix-provided tools
+            export PATH="${pkgs.python3Full}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:$PATH"
             ${if isLinux then "export PATH=\"${pkgs.chromedriver}/bin:${pkgs.chromium}/bin:$PATH\"" else ""}
             ${if isLinux then "export LD_LIBRARY_PATH=\"${pkgs.lib.makeLibraryPath linuxPackages}:$LD_LIBRARY_PATH\"" else ""}
 
             export EFFECTIVE_OS="${if isDarwin then "darwin" else "linux"}"
+            
+            # Create a temporary working directory
             WORK_DIR=$(mktemp -d)
             cd "$WORK_DIR"
+            
+            # Create and activate a temporary virtual environment
+            echo "Creating temporary Python virtual environment..."
+            ${pkgs.python3Full}/bin/python -m venv .venv-runner
+            source .venv-runner/bin/activate
+            
+            # Install required Python packages
+            echo "Installing Python dependencies..."
+            pip install --upgrade pip
+            pip install selenium webdriver-manager
+            
+            # Run the test script
+            echo "Running Selenium test..."
             python ${./test_selenium.py}
+            
+            # Create output directory and copy script
             mkdir -p $out/bin
             cp ${./test_selenium.py} $out/bin/standalone-selenium-test
+            chmod +x $out/bin/standalone-selenium-test
           '';
           phases = [ "installPhase" ];
           installPhase = "$builder";

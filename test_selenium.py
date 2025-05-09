@@ -42,7 +42,6 @@ def get_host_browser_path(browser_name: str) -> str | None:
         else:
             print(f"  Path from env var '{user_path}' does not seem to exist or is invalid for this OS.")
 
-
     try:
         # find-browser script is expected to be in PATH via Nix environment
         process = subprocess.run(
@@ -108,15 +107,38 @@ def run_selenium_test():
 
         target_url = "http://example.com"
         print(f"Navigating to {target_url}...")
+        
+        # Navigate to the page
         driver.get(target_url)
+        
+        # Get the final URL after any redirects
+        final_url = driver.current_url
+        
+        # Get the status code using JavaScript's Performance API
+        status_code = None
+        try:
+            status_code = driver.execute_script("""
+                return window.performance.getEntriesByType('navigation')[0].responseStatus;
+            """)
+        except Exception as e:
+            print(f"Warning: Could not get status code via Performance API: {e}")
+            try:
+                # Fallback to a different Performance API method
+                status_code = driver.execute_script("""
+                    return window.performance.getEntriesByType('resource')[0].responseStatus;
+                """)
+            except Exception as e2:
+                print(f"Warning: Could not get status code via fallback method: {e2}")
+        
         title = driver.title
         print(f"Page title: '{title}'")
+        print(f"HTTP Status Code (for {final_url}): {status_code}")
 
-        if "example domain" in title.lower():
-            print("SUCCESS: Correct page title found!")
+        if "example domain" in title.lower() and status_code == 200:
+            print("SUCCESS: Correct page title and status code found!")
             success = True
         else:
-            print(f"FAILURE: Unexpected page title: '{title}'")
+            print(f"FAILURE: Unexpected page title: '{title}' or status code: {status_code}")
 
     except WebDriverException as e:
         print(f"WebDriverException occurred: {e}")

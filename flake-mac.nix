@@ -32,15 +32,8 @@
             fi
           elif [[ "$OS_TYPE" == "linux" ]]; then
             if [[ "$BROWSER_NAME" == "chrome" ]]; then
-              # Try system Chrome first
               TMP_PATH=$(command -v google-chrome-stable || command -v google-chrome || command -v chromium-browser || command -v chromium 2>/dev/null)
               if [[ -n "$TMP_PATH" ]]; then echo "$TMP_PATH"; exit 0; fi
-              
-              # Try Nix-provided Chromium as fallback
-              if [[ -x "${pkgs.chromium}/bin/chromium" ]]; then 
-                echo "${pkgs.chromium}/bin/chromium"; 
-                exit 0
-              fi
             fi
           elif [[ "$OS_TYPE" == "wsl" ]]; then
             if [[ "$BROWSER_NAME" == "chrome" ]]; then
@@ -63,58 +56,19 @@
           '';
         };
 
-        # Base dependencies needed for all platforms
-        baseDeps = with pkgs; [
-          python3Full
-          coreutils # for mktemp, etc.
-          bash      # for running the builder script
-          findBrowserScript
-          zlib          # In case any pip package (even deps of selenium) needs it
-          gcc           # For compiling any C extensions during pip install
-        ];
-
-        # Linux-specific dependencies
-        linuxDeps = with pkgs; if stdenv.isLinux then [
-          chromium      # Fallback browser for Linux
-          xorg.libX11   # Required for Chrome/Chromium on Linux
-          xorg.libXcomposite
-          xorg.libXcursor
-          xorg.libXdamage
-          xorg.libXext
-          xorg.libXi
-          xorg.libXtst
-          xorg.libXrandr
-          xorg.libXrender
-          xorg.libXScrnSaver
-          alsa-lib      # For audio support
-          atk          # Accessibility toolkit
-          cairo        # Graphics library
-          cups         # Printing system
-          dbus         # Message bus system
-          expat        # XML parsing library
-          fontconfig   # Font configuration
-          freetype     # Font rendering
-          gdk-pixbuf   # Image loading library
-          glib         # Core library
-          gtk3         # GUI toolkit
-          libdrm       # Direct Rendering Manager
-          libnotify    # Desktop notifications
-          libpulseaudio # Sound server
-          xorg.libxcb  # X11 protocol
-          xorg.libxshmfence # Shared memory fences
-          mesa         # OpenGL implementation
-          nspr         # Mozilla runtime
-          nss          # Network Security Services
-          pango        # Text rendering
-          udev         # Device management
-        ] else [];
-
         # The package that sets up the environment and runs the test
         seleniumTestRunner = pkgs.stdenv.mkDerivation {
           name = "run-selenium-poc";
           
           # System dependencies needed to build/run the test environment
-          buildInputs = baseDeps ++ linuxDeps;
+          buildInputs = with pkgs; [
+            python3Full
+            coreutils # for mktemp, etc.
+            bash      # for running the builder script
+            findBrowserScript
+            zlib          # In case any pip package (even deps of selenium) needs it
+            gcc           # For compiling any C extensions during pip install
+          ];
           
           # This script is the "build" process for this derivation.
           builder = pkgs.writeShellScript "run-selenium-test.sh" ''
@@ -125,7 +79,7 @@
 
             # Ensure all buildInputs are available in PATH for this script
             export PATH="${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:${findBrowserScript}/bin:$PATH"
-            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (baseDeps ++ linuxDeps)}:$LD_LIBRARY_PATH"
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ python3 coreutils bash findBrowserScript zlib gcc ])}:$LD_LIBRARY_PATH"
 
             # Determine EFFECTIVE_OS for find-browser (used by python script via os.environ)
             if [[ -n "$WSL_DISTRO_NAME" ]]; then
@@ -171,7 +125,12 @@
         # A dev shell for interactive testing / venv setup
         devShells.default = pkgs.mkShell {
           name = "selenium-poc-devshell";
-          packages = baseDeps ++ linuxDeps;
+          packages = with pkgs; [
+            python3Full
+            findBrowserScript
+            zlib
+            gcc
+          ];
           shellHook = ''
             echo "Standalone Selenium POC Dev Shell"
             
@@ -179,11 +138,6 @@
             test -d .venv || ${pkgs.python3}/bin/python -m venv .venv
             export VIRTUAL_ENV="$(pwd)/.venv"
             export PATH="$VIRTUAL_ENV/bin:$PATH"
-            
-            # Set up library paths for Linux
-            if [[ "${system}" == *linux* ]]; then
-              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath linuxDeps}:$LD_LIBRARY_PATH"
-            fi
             
             # Install required packages in the virtual environment
             echo "Installing Python packages..."

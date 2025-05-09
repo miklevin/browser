@@ -84,7 +84,7 @@ def run_selenium_test():
         else:
             print("No specific host Chrome/Chromium path found/set. Selenium will try to use browser from PATH (e.g., Nix's 'chromium').")
 
-        chrome_options.add_argument("--headless=new") # Use new headless mode
+        # Removed headless mode to make browser visible
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")

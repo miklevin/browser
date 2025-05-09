@@ -34,6 +34,8 @@
             if [[ "$BROWSER_NAME" == "chrome" ]]; then
               TMP_PATH=$(command -v google-chrome-stable || command -v google-chrome || command -v chromium-browser || command -v chromium 2>/dev/null)
               if [[ -n "$TMP_PATH" ]]; then echo "$TMP_PATH"; exit 0; fi
+              # Fallback for Nix-provided chromium if not found by generic names by `command -v`
+              if [[ -x "${pkgs.chromium}/bin/chromium" ]]; then echo "${pkgs.chromium}/bin/chromium"; exit 0; fi
             fi
           elif [[ "$OS_TYPE" == "wsl" ]]; then
             if [[ "$BROWSER_NAME" == "chrome" ]]; then
@@ -68,7 +70,10 @@
             findBrowserScript
             zlib          # In case any pip package (even deps of selenium) needs it
             gcc           # For compiling any C extensions during pip install
-          ];
+          ] ++ (if stdenv.isLinux then [
+            chromedriver
+            chromium
+          ] else []);
           
           # This script is the "build" process for this derivation.
           builder = pkgs.writeShellScript "run-selenium-test.sh" ''
@@ -79,7 +84,8 @@
 
             # Ensure all buildInputs are available in PATH for this script
             export PATH="${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:${findBrowserScript}/bin:$PATH"
-            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ python3 coreutils bash findBrowserScript zlib gcc ])}:$LD_LIBRARY_PATH"
+            ${if pkgs.stdenv.isLinux then "export PATH=\"${pkgs.chromedriver}/bin:${pkgs.chromium}/bin:$PATH\"" else ""}
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ python3 coreutils bash findBrowserScript zlib gcc ] ++ (if stdenv.isLinux then [ chromedriver chromium ] else []))}:$LD_LIBRARY_PATH"
 
             # Determine EFFECTIVE_OS for find-browser (used by python script via os.environ)
             if [[ -n "$WSL_DISTRO_NAME" ]]; then
@@ -130,7 +136,10 @@
             findBrowserScript
             zlib
             gcc
-          ];
+          ] ++ (if stdenv.isLinux then [
+            chromedriver
+            chromium
+          ] else []);
           shellHook = ''
             echo "Standalone Selenium POC Dev Shell"
             
@@ -138,6 +147,11 @@
             test -d .venv || ${pkgs.python3}/bin/python -m venv .venv
             export VIRTUAL_ENV="$(pwd)/.venv"
             export PATH="$VIRTUAL_ENV/bin:$PATH"
+            
+            # Set up library paths for Linux
+            if [[ "${system}" == *linux* ]]; then
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ chromedriver chromium ])}:$LD_LIBRARY_PATH"
+            fi
             
             # Install required packages in the virtual environment
             echo "Installing Python packages..."

@@ -95,9 +95,12 @@ def run_selenium_test():
         chrome_options.add_argument(f"--user-data-dir={temp_profile_dir}")
         print(f"Using temporary Chrome profile directory: {temp_profile_dir}")
 
-        # Use webdriver-manager to automatically download and manage ChromeDriver
-        print("Initializing ChromeService with webdriver-manager...")
-        chrome_service = ChromeService(ChromeDriverManager().install())
+        # Use webdriver-manager on Mac, system chromedriver on Linux
+        print("Initializing ChromeService...")
+        if os.environ.get("EFFECTIVE_OS") == "darwin":
+            chrome_service = ChromeService(ChromeDriverManager().install())
+        else:
+            chrome_service = ChromeService() # Use system chromedriver on Linux
         
         print("Initializing webdriver.Chrome...")
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)

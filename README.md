@@ -14,7 +14,7 @@ A standalone proof-of-concept demonstrating reliable browser automation on NixOS
 
 1. Clone this repository:
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/miklevin/browser
    cd browser
    ```
 

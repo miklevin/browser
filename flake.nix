@@ -34,10 +34,6 @@
             if [[ "$BROWSER_NAME" == "chrome" ]]; then
               TMP_PATH=$(command -v google-chrome-stable || command -v google-chrome || command -v chromium-browser || command -v chromium 2>/dev/null)
               if [[ -n "$TMP_PATH" ]]; then echo "$TMP_PATH"; exit 0; fi
-              # Fallback for Nix-provided chromium if not found by generic names by `command -v`
-              # This relies on pkgs.chromium being available in the PATH where this script runs.
-              # If this script is part of the devShell, pkgs.chromium path will be there.
-              if [[ -x "${pkgs.chromium}/bin/chromium" ]]; then echo "${pkgs.chromium}/bin/chromium"; exit 0; fi
             fi
           elif [[ "$OS_TYPE" == "wsl" ]]; then
             if [[ "$BROWSER_NAME" == "chrome" ]]; then
@@ -65,22 +61,16 @@
           name = "run-selenium-poc";
           
           # System dependencies needed to build/run the test environment
-          # These are available when the `builder` script runs.
           buildInputs = with pkgs; [
-            (python3.withPackages(ps: [ ps.selenium ]))
+            python3Full
             coreutils # for mktemp, etc.
             bash      # for running the builder script
-
-            # Tools for Selenium
-            chromedriver
-            chromium      # Fallback browser for chromedriver
             findBrowserScript
             zlib          # In case any pip package (even deps of selenium) needs it
             gcc           # For compiling any C extensions during pip install
           ];
           
           # This script is the "build" process for this derivation.
-          # It sets up a venv, pip installs, and runs the test.
           builder = pkgs.writeShellScript "run-selenium-test.sh" ''
             source $stdenv/setup # Basic Nix build environment setup
             set -e o pipefail    # Exit on error, treat unset variables as an error
@@ -88,9 +78,8 @@
             echo "--- Starting Standalone Selenium Test Runner ---"
 
             # Ensure all buildInputs are available in PATH for this script
-            export PATH="${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.chromedriver}/bin:${pkgs.chromium}/bin:${findBrowserScript}/bin:$PATH"
-            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ python3 coreutils bash chromedriver chromium findBrowserScript zlib gcc ])}:$LD_LIBRARY_PATH"
-
+            export PATH="${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:${findBrowserScript}/bin:$PATH"
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ python3 coreutils bash findBrowserScript zlib gcc ])}:$LD_LIBRARY_PATH"
 
             # Determine EFFECTIVE_OS for find-browser (used by python script via os.environ)
             if [[ -n "$WSL_DISTRO_NAME" ]]; then
@@ -120,8 +109,6 @@
             echo "--- Test Runner Finished ---"
           '';
           
-          # This derivation doesn't produce much beyond running the test.
-          # The builder script itself is the "install phase".
           phases = [ "installPhase" ];
           installPhase = "$builder";
         };
@@ -139,15 +126,24 @@
         devShells.default = pkgs.mkShell {
           name = "selenium-poc-devshell";
           packages = with pkgs; [
-            (python3.withPackages(ps: [ ps.selenium ]))
-            chromedriver
-            chromium
+            python3Full
             findBrowserScript
             zlib
             gcc
           ];
           shellHook = ''
             echo "Standalone Selenium POC Dev Shell"
+            
+            # Set up the Python virtual environment
+            test -d .venv || ${pkgs.python3}/bin/python -m venv .venv
+            export VIRTUAL_ENV="$(pwd)/.venv"
+            export PATH="$VIRTUAL_ENV/bin:$PATH"
+            
+            # Install required packages in the virtual environment
+            echo "Installing Python packages..."
+            pip install --upgrade pip
+            pip install selenium webdriver-manager
+            
             echo "Run: python ./test_selenium.py"
             
             if [[ -n "$WSL_DISTRO_NAME" ]]; then
@@ -160,7 +156,7 @@
               export EFFECTIVE_OS="unknown"
             fi
             echo "EFFECTIVE_OS for manual testing: $EFFECTIVE_OS"
-            echo "WebDrivers (chromedriver) and find-browser are in PATH."
+            echo "WebDriver Manager is available for automatic ChromeDriver management."
           '';
         };
       }

@@ -8,6 +8,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.common.exceptions import WebDriverException
+from webdriver_manager.chrome import ChromeDriverManager
 
 print("--- Pipulate Standalone Selenium POC ---")
 
@@ -94,9 +95,9 @@ def run_selenium_test():
         chrome_options.add_argument(f"--user-data-dir={temp_profile_dir}")
         print(f"Using temporary Chrome profile directory: {temp_profile_dir}")
 
-        # Assumes 'chromedriver' from nixpkgs is in the PATH set by the Nix shell
-        print("Initializing ChromeService (chromedriver should be in PATH)...")
-        chrome_service = ChromeService() 
+        # Use webdriver-manager to automatically download and manage ChromeDriver
+        print("Initializing ChromeService with webdriver-manager...")
+        chrome_service = ChromeService(ChromeDriverManager().install())
         
         print("Initializing webdriver.Chrome...")
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
